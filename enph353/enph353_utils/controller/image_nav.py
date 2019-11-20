@@ -10,7 +10,7 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
 
-d = 0.05
+d = 0.03
 speed = 0.01
 
 class image_converter:
@@ -59,7 +59,7 @@ class image_converter:
         #print("drive error:", drive_error)
         velocity = Twist()
 
-        if self.red == 0:
+        if (self.red == 0) or (self.red == 5):
             if (drive_error > 3) or (drive_error < -3):
                 velocity.angular.z = d * drive_error
                 #print("angular v:", velocity.angular.z)
@@ -144,12 +144,17 @@ class image_converter:
 
         elif self.red == 4:
             if (drive_error > 3) or (drive_error < -3):
+                #print("drive_error:", drive_error)
                 velocity.angular.z = d * drive_error
                 #print("angular v:", velocity.angular.z)
                 self.vel_pub.publish(velocity)
             else:
                 velocity.linear.x = speed
                 self.vel_pub.publish(velocity)
+
+            if drive_error > 7:
+                print("SWITCHING TO STATE 5")
+                self.red = 5
 
 
 def main(args):
