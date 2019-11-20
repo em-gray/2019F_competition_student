@@ -10,8 +10,8 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
 
-d = 0.03
-speed = 0.01
+d = 4
+speed = 1
 
 class image_converter:
     def __init__(self):
@@ -19,8 +19,8 @@ class image_converter:
         self.image_sub = rospy.Subscriber("R1/pi_camera/image_raw", Image, self.callback)
         self.vel_pub = rospy.Publisher("R1/cmd_vel", Twist, queue_size=30)
         self.prev_err = 0
-        self.crosswalk = False
-        self.red = 0       # 0 means i havent seen cross walk, 1 means i saw the first red line, 2 means i am between lines, 3 is i saw second line, 4 is im passed it
+        self.crosswalk = 0
+        self.red = 0
 
     def callback(self, data):
         try:
@@ -41,8 +41,8 @@ class image_converter:
         lower_red = np.array([0,0,245])
         upper_red = np.array([10,10,255])
     
-        mask = cv.inRange(roi_crosswalk, lower_red, upper_red)
-        cv.imshow("Crosswalk detection", mask)
+        mask_red = cv.inRange(roi_crosswalk, lower_red, upper_red)
+        #cv.imshow("Crosswalk detection", mask_red)
 
         M = cv.moments(thresh)
         meep = (M["m00"])
@@ -51,7 +51,7 @@ class image_converter:
         cX = int(M["m10"] / meep)+640
         
         cv.circle(frame, (int(cX), height-100), 20, (0, 255, 0), -1)
-        cv.imshow("Cropped right corner", gray)
+        #cv.imshow("Cropped right corner", gray)
         cv.imshow("Robot Camera", frame)
         cv.waitKey(1)
 
@@ -75,17 +75,48 @@ class image_converter:
         # pause for 5 seconds
             sum = 0
             for i in range (400,800):
-                sum += mask[20][i] #numpy arrays are y,x
+                sum += mask_red[20][i] #numpy arrays are y,x
 
              # SEE RED ONCE and STOP
             if sum > 0:
                 print("SEEING RED 1:", sum)
-                self.red = 1
+                self.crosswalk += 1
+                self.red = -1
                 velocity.angular.z = 0
                 self.vel_pub.publish(velocity)
                 velocity.linear.x = 0
                 self.vel_pub.publish(velocity)
-                time.sleep(5)
+
+        elif self.red == -1:
+            # we look for pedestrian
+            print("looking for ped")
+            self.crosswalk += 1
+
+            roi_ped = frame[0:500, 0:width] 
+
+            lower_white = np.array([190,190,190])
+            upper_white = np.array([255,255,255])
+
+            mask_white = cv.inRange(roi_ped, lower_white, upper_white)
+            cv.rectangle(mask_white, (545, 500-166), (800, 500-111), (255,0,0), 1)
+            cv.imshow("Pedestrian detection", mask_white)
+
+            sum_ped = 0
+            for i in range (555,790):
+                for j in range (500-156, 500-121):
+                    sum_ped += mask_white[j][i]
+
+            print("SUM PED:", sum_ped)
+
+            if (sum_ped != 0): # if pedestrian, wait, and check frame again
+                velocity.angular.z = 0
+                self.vel_pub.publish(velocity)
+                velocity.linear.x = 0
+                self.vel_pub.publish(velocity)
+            
+            else: 
+                self.red = 1
+
 
         # self.red == 1 saw the first red line
         # need to wait for that region to be black again
@@ -95,7 +126,7 @@ class image_converter:
             sum = 0
             for i in range (400,800):
                 for j in range (0,20):
-                    sum += mask[j][i] #numpy arrays are y,x
+                    sum += mask_red[j][i] #numpy arrays are y,x
 
             if sum == 0:
                 print("SEEING BLACK 2:", sum)
@@ -113,7 +144,7 @@ class image_converter:
         elif self.red == 2:
             sum = 0
             for i in range (400,800):
-                sum += mask[20][i] #numpy arrays are y,x
+                sum += mask_red[20][i] #numpy arrays are y,x
 
             if sum == 0:
                 velocity.angular.z = 0
@@ -131,7 +162,7 @@ class image_converter:
         elif self.red == 3:
             sum = 0
             for i in range (400,800):
-                sum += mask[20][i] #numpy arrays are y,x
+                sum += mask_red[20][i] #numpy arrays are y,x
 
             if sum == 0:
                 print("SEEING BLACK 4", sum)
@@ -156,7 +187,12 @@ class image_converter:
                 print("SWITCHING TO STATE 5")
                 self.red = 5
 
-
+        # if self.crosswalk == 3:
+        #     velocity.angular.z = 0
+        #     self.vel_pub.publish(velocity)
+        #     velocity.linear.x = 0
+        #     self.vel_pub.publish(velocity)
+            
 def main(args):
     # nav = navigation()
     # rospy.init_node('navigation', anonymous=True)
