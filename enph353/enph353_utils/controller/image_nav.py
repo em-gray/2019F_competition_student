@@ -65,11 +65,8 @@ class image_converter:
         lower_white = np.array([190,190,190])
         upper_white = np.array([255,255,255])
         mask_init = cv.inRange(roi_init, lower_white, upper_white)
-        cv.imshow("Initial Turn", mask_init)
+        #cv.imshow("Initial Turn", mask_init)
 
-
-        #cv.imshow("Robot Camera", frame)
-        cv.waitKey(1)
         ########### STATE MACHINE #######################
 
         # inital turn to get to outer loop
@@ -95,7 +92,8 @@ class image_converter:
                 for j in range (300, 400):
                     sum += mask_init[j][i] #numpy arrays are y,x
 
-            cv.rectangle(mask_init, (490, 290), (790, 390), (255,0,0), 1)
+            #cv.rectangle(mask_init, (490, 290), (790, 390), (255,0,0), 1)
+            #cv.rectangle(frame, (490, 290), (790, 390), (255,0,0), 1)
             if sum == 0:
                 print("TURNING")
                 velocity.angular.z = d
@@ -143,8 +141,9 @@ class image_converter:
             upper_white = np.array([255,255,255])
 
             mask_white = cv.inRange(roi_ped, lower_white, upper_white)
-            cv.rectangle(mask_white, (545, 500-166), (800, 500-111), (255,0,0), 1)
-            cv.imshow("Pedestrian detection", mask_white)
+            # cv.rectangle(mask_white, (545, 500-166), (800, 500-111), (255,0,0), 1)
+            cv.rectangle(frame, (545, 500-166), (800, 500-111), (255,255,255), 1)
+            #cv.imshow("Pedestrian detection", mask_white)
 
             sum_ped = 0
             for i in range (555,790):
@@ -229,6 +228,9 @@ class image_converter:
             if drive_error > 7:
                 print("SWITCHING TO STATE 5")
                 self.state = 5
+
+        cv.imshow("Robot Camera", frame)
+        cv.waitKey(1)
 
         # if self.crosswalk == 3:
         #     velocity.angular.z = 0
