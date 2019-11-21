@@ -21,6 +21,9 @@ class image_converter:
         self.prev_err = 0
         self.crosswalk = 0
         self.state = -3
+        self.car_count = 0
+        self.prev_sum = 0
+        self.curr_sum = 0
 
     def callback(self, data):
         try:
@@ -57,20 +60,17 @@ class image_converter:
         mask_red = cv.inRange(roi_crosswalk, lower_red, upper_red)
         #cv.imshow("Crosswalk detection", mask_red)
 
-        #### frame processing for initial turn
-        roi_init = frame[0:height, 0:width]
-        # gray_init = cv.cvtColor(roi_init, cv.COLOR_BGR2GRAY)
-        # ret_init, thresh_init = cv.threshold(gray_init, 127, 255, cv.THRESH_BINARY_INV)
-        # cv.imshow("Initial Turn", thresh_init)
-        lower_white = np.array([190,190,190])
-        upper_white = np.array([255,255,255])
-        mask_init = cv.inRange(roi_init, lower_white, upper_white)
-        #cv.imshow("Initial Turn", mask_init)
 
         ########### STATE MACHINE #######################
-
         # inital turn to get to outer loop
         if (self.state == -3):
+            #### frame processing for initial turn
+            roi_init = frame[0:height, 0:width]
+            lower_white = np.array([190,190,190])
+            upper_white = np.array([255,255,255])
+            mask_init = cv.inRange(roi_init, lower_white, upper_white)
+            #cv.imshow("Initial Turn", mask_init)
+
             sum = 0
             for i in range (620, 660):
                 for j in range (10, 500):
@@ -85,8 +85,14 @@ class image_converter:
             else:
                 self.state = -2
 
+
         elif (self.state == -2):
             # turn left until good enough to line follow
+            roi_init = frame[0:height, 0:width]
+            lower_white = np.array([190,190,190])
+            upper_white = np.array([255,255,255])
+            mask_init = cv.inRange(roi_init, lower_white, upper_white)
+
             sum = 0
             for i in range (500, 780):
                 for j in range (300, 400):
@@ -111,6 +117,40 @@ class image_converter:
             else:
                 velocity.linear.x = speed
                 self.vel_pub.publish(velocity)
+
+            ##### frame processing for car detection
+            roi_blue = frame[0:height, 0:640]
+            lower_b1 = np.array([100, 0, 0])
+            upper_b1 = np.array([110, 5, 5])
+            lower_b2 = np.array([115, 15, 15])
+            upper_b2 = np.array([130, 25, 25])
+            lower_b3 = np.array([170, 85, 85])
+            upper_b3 = np.array([205, 105, 105])
+
+            mask_b1 = cv.inRange(roi_blue, lower_b1, upper_b1)
+            mask_b2 = cv.inRange(roi_blue, lower_b2, upper_b2)
+            mask_b3 = cv.inRange(roi_blue, lower_b3, upper_b3)
+            mask_blue_A = cv.bitwise_or(mask_b1, mask_b2)
+            mask_blue_B = cv.bitwise_or(mask_b2, mask_b3)
+            mask_blue = cv.bitwise_or(mask_blue_A, mask_blue_B)
+
+            cv.rectangle(mask_blue, (145, 440), (235, 500), (255,255,255), 1)
+            cv.imshow("Blue mask", mask_blue)
+
+            for j in range (450,490):
+                for i in range (150,230):
+                    self.curr_sum = mask_blue[j][i]
+            print("PREV:", self.prev_sum)
+            print("CURR:", self.curr_sum)
+
+            if (self.curr_sum > 0) and (self.prev_sum == 0):
+                print("SNAPPED!")
+                print("CAR SUM:", self.curr_sum)
+                cv.imwrite("car%d.jpg" % self.car_count, frame)
+                self.car_count += 1
+
+            self.prev_sum = self.curr_sum
+
 
         #self.state == 0 havent seen anything
         # look for red
