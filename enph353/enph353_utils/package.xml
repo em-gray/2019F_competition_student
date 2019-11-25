@@ -19,4 +19,10 @@
   <exec_depend>message_generation</exec_depend>
   <exec_depend>actionlib_msgs</exec_depend>
 
+  <!-- Additional dependencies -->
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>keras</exec_depend>
+
+
+
 </package>
