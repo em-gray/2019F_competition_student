@@ -60,7 +60,6 @@ class image_converter:
         mask_red = cv.inRange(roi_crosswalk, lower_red, upper_red)
         #cv.imshow("Crosswalk detection", mask_red)
 
-
         ########### STATE MACHINE #######################
         # inital turn to get to outer loop
         if (self.state == -3):
@@ -75,6 +74,9 @@ class image_converter:
             for i in range (620, 660):
                 for j in range (10, 500):
                     sum += mask_init[j][i] #numpy arrays are y,x
+
+            # sum_crop = mask_init[10:500][620:660]
+            # sum =  np.sum(sum_crop)
 
             if sum > 0:
                 print("DRIVING STRAIGHT")
@@ -97,6 +99,8 @@ class image_converter:
             for i in range (500, 780):
                 for j in range (300, 400):
                     sum += mask_init[j][i] #numpy arrays are y,x
+            #
+            # sum =  np.sum(np.array(mask_init[300:400][500:780]))
 
             #cv.rectangle(mask_init, (490, 290), (790, 390), (255,0,0), 1)
             #cv.rectangle(frame, (490, 290), (790, 390), (255,0,0), 1)
@@ -134,23 +138,35 @@ class image_converter:
             mask_blue_B = cv.bitwise_or(mask_b2, mask_b3)
             mask_blue = cv.bitwise_or(mask_blue_A, mask_blue_B)
 
-            cv.rectangle(mask_blue, (145, 440), (235, 500), (255,255,255), 1)
-            cv.imshow("Blue mask", mask_blue)
+            #cv.rectangle(mask_blue, (145, 440), (235, 500), (255,255,255), 1)
+            #cv.imshow("Blue mask", mask_blue)
 
-            for j in range (450,490):
-                for i in range (150,230):
-                    self.curr_sum = mask_blue[j][i]
+            self.curr_sum = 0
+            for j in range (485,490):
+                for i in range (215,230):
+                    self.curr_sum += mask_blue[j][i]
+
+            # self.curr_sum =  np.sum(np.array(mask_blue[450:490][150:230]))
             print("PREV:", self.prev_sum)
             print("CURR:", self.curr_sum)
 
             if (self.curr_sum > 0) and (self.prev_sum == 0):
+                # sum = 0
+                # for j in range (300,600):
+                #     for i in range (0,30):
+                #         sum += mask_blue[j][i]
+                # if sum == 0: #if edge pixels don't have blue
+                #     print("SNAPPED!")
+                #     print("CAR SUM:", self.curr_sum)
+                #     cv.imwrite("car%d.jpg" % self.car_count, frame)
+                #     self.car_count += 1
+
                 print("SNAPPED!")
                 print("CAR SUM:", self.curr_sum)
                 cv.imwrite("car%d.jpg" % self.car_count, frame)
                 self.car_count += 1
 
             self.prev_sum = self.curr_sum
-
 
         #self.state == 0 havent seen anything
         # look for red
@@ -159,6 +175,8 @@ class image_converter:
             sum = 0
             for i in range (400,800):
                 sum += mask_red[20][i] #numpy arrays are y,x
+
+            # sum = np.sum(np.array(mask_red[20][400:800]))
 
              # SEE RED ONCE and STOP
             if sum > 0:
@@ -181,16 +199,18 @@ class image_converter:
             upper_white = np.array([255,255,255])
 
             mask_white = cv.inRange(roi_ped, lower_white, upper_white)
-            # cv.rectangle(mask_white, (545, 500-166), (800, 500-111), (255,0,0), 1)
-            cv.rectangle(frame, (545, 500-166), (800, 500-111), (255,255,255), 1)
-            #cv.imshow("Pedestrian detection", mask_white)
 
             sum_ped = 0
-            for i in range (555,790):
-                for j in range (500-156, 500-121):
+            for i in range (545,800):
+                for j in range (500-166, 500-111):
                     sum_ped += mask_white[j][i]
 
+            # sum_ped = np.sum(np.array(mask_white[500-166:500-111][545:800]))
+
             print("SUM PED:", sum_ped)
+
+            #cv.rectangle(mask_white, (545, 500-166), (800, 500-111), (255,0,0), 1)
+            #cv.imshow("Pedestrian detection", mask_white)
 
             if (sum_ped != 0): # if pedestrian, wait, and check frame again
                 velocity.angular.z = 0
@@ -211,6 +231,8 @@ class image_converter:
                 for j in range (0,20):
                     sum += mask_red[j][i] #numpy arrays are y,x
 
+            # sum = np.sum(np.array(mask_red[0:20][400:800]))
+
             if sum == 0:
                 print("SEEING BLACK 2:", sum)
                 self.state = 2
@@ -227,6 +249,8 @@ class image_converter:
             sum = 0
             for i in range (400,800):
                 sum += mask_red[20][i] #numpy arrays are y,x
+
+            # sum = np.sum(np.array(mask_red[20][400:800]))
 
             if sum == 0:
                 velocity.angular.z = 0
@@ -245,6 +269,8 @@ class image_converter:
             sum = 0
             for i in range (400,800):
                 sum += mask_red[20][i] #numpy arrays are y,x
+
+            # sum = np.sum(np.array(mask_red[20][400:800]))
 
             if sum == 0:
                 print("SEEING BLACK 4", sum)
@@ -269,14 +295,12 @@ class image_converter:
                 print("SWITCHING TO STATE 5")
                 self.state = 5
 
+        #cv.rectangle(frame, (0, 300), (30, 600), (255,255,255), 1)
+        cv.rectangle(frame, (215, 485), (230, 490), (255,255,255), 1) # car detection
+        cv.rectangle(frame, (545, 500-166), (795, 500-111), (255,255,255), 1)
         cv.imshow("Robot Camera", frame)
         cv.waitKey(1)
 
-        # if self.crosswalk == 3:
-        #     velocity.angular.z = 0
-        #     self.vel_pub.publish(velocity)
-        #     velocity.linear.x = 0
-        #     self.vel_pub.publish(velocity)
 
 def main(args):
     # nav = navigation()
