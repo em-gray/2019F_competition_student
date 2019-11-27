@@ -13,80 +13,6 @@ from keras.models import load_model
 
 # ROSNode to process camera input and publish license plate files, while keeping track of visited plates
 
-# helper functions - maybe move to another file at some point
-
-# edge detection & helpers adapted from https://github.com/Breta01/handwriting-ocr/blob/master/notebooks/page_detection.ipynb
-def edges_det(img, min_val, max_val):
-    """ Preprocessing (gray, thresh, filter, border) + Canny edge detection """
-    img = cv.cvtColor(resize(img), cv.COLOR_BGR2GRAY)
-
-    # Applying blur and threshold
-    img = cv.bilateralFilter(img, 9, 75, 75)
-    img = cv.adaptiveThreshold(img, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 115, 4)
-
-    # Median blur replace center pixel by median of pixels under kelner
-    # => removes thin details
-    img = cv.medianBlur(img, 11)
-
-    # Add black border - detection of border touching pages
-    # Contour can't touch side of image
-    img = cv.copyMakeBorder(img, 5, 5, 5, 5, cv.BORDER_CONSTANT, value=[0, 0, 0])
-    implt(img, 'gray', 'Median Blur + Border')
-
-    return cv.Canny(img, min_val, max_val)
-
-def resize(img, height=800):
-    """ Resize image to given height """	    
-    rat = height / img.shape[0]	    
-    return cv.resize(img, (int(rat * img.shape[1]), height))
-
-def four_corners_sort(pts):
-    """ Sort corners: top-left, bot-left, bot-right, top-right"""
-    diff = np.diff(pts, axis=1)
-    summ = pts.sum(axis=1)
-    return np.array([pts[np.argmin(summ)],
-                     pts[np.argmax(diff)],
-                     pts[np.argmax(summ)],
-                     pts[np.argmin(diff)]])
-
-def contour_offset(cnt, offset):
-    """ Offset contour because of 5px border """
-    cnt += offset
-    cnt[cnt < 0] = 0
-    return cnt
-
-def find_page_contours(edges, img):
-    """ Finding corner points of page contour """
-    # Getting contours  
-    im2, contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    
-    # Finding biggest rectangle otherwise return original corners
-    height = edges.shape[0]
-    width = edges.shape[1]
-    MIN_COUNTOUR_AREA = height * width * 0.5
-    MAX_COUNTOUR_AREA = (width - 10) * (height - 10)
-
-    max_area = MIN_COUNTOUR_AREA
-    page_contour = np.array([[0, 0],
-                            [0, height-5],
-                            [width-5, height-5],
-                            [width-5, 0]])
-
-    for cnt in contours:
-        perimeter = cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, 0.03 * perimeter, True)
-
-        # Page has 4 corners and it is convex
-        if (len(approx) == 4 and
-                cv2.isContourConvex(approx) and
-                max_area < cv2.contourArea(approx) < MAX_COUNTOUR_AREA):
-            
-            max_area = cv2.contourArea(approx)
-            page_contour = approx[:, 0]
-
-    # Sort corners and offset them
-    page_contour = four_corners_sort(page_contour)
-    return contour_offset(page_contour, (-5, -5))
 # main 
 class license_finder:
     def __init__(self):
@@ -104,18 +30,123 @@ class license_finder:
         except CvBridgeError as e:
             print(e)
 
-        height = np.size(frame, 0)
-        width = np.size(frame,1)
+        image = cv2.resize(frame, None, fx=1, fy=2, interpolation = cv2.INTER_LINEAR)
+        (H, W) = image.shape[:2]
+        image = image[H/2:4*H/5, 0:W/3]
+        #image = image[H/2:4*H/5, 0:W/3]
+        # cv2.imshow("cropped", image)
+        # cv2.waitKey(0)
+        orig = image.copy()
+        (origH, origW) = image.shape[:2]
 
-        # edge detection
-        edges_image = edges_det(frame, 200, 250)
+        # set the new width and height and then determine the ratio in change
+        # for both the width and height
+        (newW, newH) = (args["width"], args["height"])
+        rW = origW / float(newW)
+        rH = origH / float(newH)
 
-        # Close gaps between edges (double page clouse => rectangle kernel)
-        edges_image = cv.morphologyEx(edges_image, cv2.MORPH_CLOSE, np.ones((5, 11)))
-        page_contour = find_page_contours(edges_image, resize(frame))
-        cv.imshow(cv.drawContours(resize(frame), [page_contour], -1, (0, 255, 0), 3))
+        # resize the image and grab the new image dimensions
+        image = cv2.resize(image, (newW, newH))
+        (H, W) = image.shape[:2]
 
-        cv.waitKey(1)
+        # define the two output layer names for the EAST detector model that
+        # we are interested -- the first is the output probabilities and the
+        # second can be used to derive the bounding box coordinates of text
+        layerNames = [
+            "feature_fusion/Conv_7/Sigmoid",
+            "feature_fusion/concat_3"]
+
+        # load the pre-trained EAST text detector
+        print("[INFO] loading EAST text detector...")
+        net = cv2.dnn.readNet(args["east"])
+
+        # construct a blob from the image and then perform a forward pass of
+        # the model to obtain the two output layer sets
+        blob = cv2.dnn.blobFromImage(image, 1.0, (W, H),
+            (123.68, 116.78, 103.94), swapRB=True, crop=False)
+        net.setInput(blob)
+        (scores, geometry) = net.forward(layerNames)
+
+        # decode the predictions, then  apply non-maxima suppression to
+        # suppress weak, overlapping bounding boxes
+        (rects, confidences) = decode_predictions(scores, geometry)
+        boxes = non_max_suppression(np.array(rects), probs=confidences)
+
+        # initialize the list of results
+        results = []
+
+        # loop over the bounding boxes
+        for (startX, startY, endX, endY) in boxes:
+            # scale the bounding box coordinates based on the respective
+            # ratios
+            startX = int(startX * rW)
+            startY = int(startY * rH)
+            endX = int(endX * rW)
+            endY = int(endY * rH)
+
+            # in order to obtain a better OCR of the text we can potentially
+            # apply a bit of padding surrounding the bounding box -- here we
+            # are computing the deltas in both the x and y directions
+            dX = int((endX - startX) * args["padding"])
+            dY = int((endY - startY) * 2*args["padding"])
+
+            # apply padding to each side of the bounding box, respectively
+            startX = max(0, startX - dX)
+            startY = max(0, startY - dY)
+            endX = min(origW, endX + (dX * 2))
+            endY = min(origH, endY + (dY * 2))
+
+            # extract the actual padded ROI
+            roi = orig[startY:endY, startX:endX]
+
+            # further processing 
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            gray = cv2.threshold(gray, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+            gray = cv2.medianBlur(gray, 3)
+            # cv2.imshow("mask", ]gray)
+            # cv2.waitKey(0)
+
+
+            # in order to apply Tesseract v4 to OCR text we must supply
+            # (1) a language, (2) an OEM flag of 4, indicating that the we
+            # wish to use the LSTM neural net model for OCR, and finally
+            # (3) an OEM value, in this case, 7 which implies that we are
+            # treating the ROI as a single line of text
+            config = ("-l eng --oem 1 --psm 7")
+            text = pytesseract.image_to_string(gray, config=config)
+
+            # add the bounding box coordinates and OCR'd text to the list
+            # of results
+            results.append(((startX, startY, endX, endY), text))
+
+        # sort the results bounding box coordinates from top to bottom
+        results = sorted(results, key=lambda r:r[0][1])
+
+        # loop over the results
+        for ((startX, startY, endX, endY), text) in results:
+            # display the text OCR'd by Tesseract
+            print("OCR TEXT")
+            print("========")
+            print(str(unicode(text).encode('utf-8')))
+
+            # strip out non-ASCII text so we can draw the text on the image
+            # using OpenCV, then draw the text and a bounding box surrounding
+            # the text region of the input image
+            text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
+            output = orig.copy()
+            cv2.rectangle(output, (startX, startY), (endX, endY),
+                (0, 0, 255), 2)
+            cv2.putText(output, text, (startX, startY - 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+            
+            # Publish info (needs formatting)
+            textMsg = String()
+            textMsg.data = str(text)
+            self.license_pub.publish(textMsg)
+
+            # show the output image
+            cv2.imshow("Text Detection", cv2.resize(output,None,None,0.5, 0.5))
+            cv2.waitKey(0)
 
 def control():
     lf = license_finder()
