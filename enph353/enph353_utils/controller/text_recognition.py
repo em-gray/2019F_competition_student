@@ -105,12 +105,12 @@ for filename in os.listdir(args["image"]):
 
 	# set the new width and height and then determine the ratio in change
 	# for both the width and height
-	(newW, newH) = (args["width"], args["height"])
-	rW = origW / float(newW)
-	rH = origH / float(newH)
+	# (newW, newH) = (args["width"], args["height"])
+	rW = origW / float(320)
+	rH = origH / float(320)
 
 	# resize the image and grab the new image dimensions
-	image = cv2.resize(image, (newW, newH))
+	image = cv2.resize(image, (320, 320))
 	(H, W) = image.shape[:2]
 
 	# define the two output layer names for the EAST detector model that
@@ -122,7 +122,7 @@ for filename in os.listdir(args["image"]):
 
 	# load the pre-trained EAST text detector
 	print("[INFO] loading EAST text detector...")
-	net = cv2.dnn.readNet(args["east"])
+	net = cv2.dnn.readNet("frozen_east_text_detection.pb")
 
 	# construct a blob from the image and then perform a forward pass of
 	# the model to obtain the two output layer sets

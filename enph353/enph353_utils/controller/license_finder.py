@@ -35,7 +35,7 @@ def decode_predictions(scores, geometry):
 		for x in range(0, numCols):
 			# if our score does not have sufficient probability,
 			# ignore it
-			if scoresData[x] < args["min_confidence"]:
+			if scoresData[x] < 0.5:
 				continue
 
 			# compute the offset factor as our resulting feature
@@ -76,8 +76,8 @@ class license_finder:
         self.bridge = CvBridge()
         self.license_pub = rospy.Publisher("/license_plate", String)
         self.repeat_flag_pub = rospy.Publisher("/repeat_flag", Bool)
-        #self.sub = rospy.Subscriber("license_pics", Image, lf.get_plate)
-        self.sub = rospy.Subscriber("practice_plates", Image, self.get_plate)
+        self.sub = rospy.Subscriber("license_pics", Image, self.get_plate)
+        #self.sub = rospy.Subscriber("practice_plates", Image, self.get_plate)
         self.net_path = "frozen_east_text_detection.pb"
         self.padding = 0.05
         self.visited = []
@@ -105,7 +105,7 @@ class license_finder:
         rH = origH / float(H)
 
         # resize the image and grab the new image dimensions
-        # image = cv.resize(image, (newW, newH))
+        image = cv.resize(image, (320, 320))
         (H, W) = image.shape[:2]
 
         # define the two output layer names for the EAST detector model that
