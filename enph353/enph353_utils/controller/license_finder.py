@@ -20,7 +20,6 @@ class license_finder:
         self.license_pub = rospy.Publisher("/license_plate", String)
         self.repeat_flag_pub = rospy.Publisher("/repeat_flag", Bool)
         self.visited = []
-        self.model = load_model('cleverPlate.h5')
 
 
     # Inspiration from http://projectsfromtech.blogspot.com/2017/10/visual-object-recognition-in-ros-using.html
@@ -145,14 +144,14 @@ class license_finder:
             self.license_pub.publish(textMsg)
 
             # show the output image
-            cv2.imshow("Text Detection", cv2.resize(output,None,None,0.5, 0.5))
-            cv2.waitKey(0)
+            #cv2.imshow("Text Detection", cv2.resize(output,None,None,0.5, 0.5))
+            #cv2.waitKey(0)
 
 def control():
     lf = license_finder()
     rospy.init_node('license_finder', anonymous=True)
     
-    rospy.Subscriber("R1/pi_camera/image_raw", Image, license_finder.get_plate)
+    rospy.Subscriber("license_pics", Image, license_finder.get_plate)
 
     try:
         rospy.spin()
