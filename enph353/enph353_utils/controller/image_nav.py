@@ -77,7 +77,7 @@ class image_converter:
             if (self.curr_sum > 0) and (self.prev_sum == 0):
                 print("SNAPPED!")
                 print("CAR SUM:", self.curr_sum)
-                frameMsg = Image()
+                frameMsg = self.bridge.cv2_to_imgmsg(frame)
                 self.license_pub.publish(frameMsg)
                 cv.imwrite("car%d.jpg" % self.car_count, frame)
                 self.car_count += 1
@@ -224,6 +224,7 @@ class image_converter:
         lower_b1 = np.array([100, 0, 0])
         upper_b1 = np.array([110, 5, 5])
         lower_b2 = np.array([115, 15, 15])
+        lower_b3 = np.array([170, 85, 85])
         upper_b2 = np.array([130, 25, 25])
         upper_b3 = np.array([205, 105, 105])
         mask_b1 = cv.inRange(roi, lower_b1, upper_b1)
