@@ -8,6 +8,9 @@ from std_msgs.msg import String, Bool
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
+from imutils.object_detection import non_max_suppression
+import pytesseract
+import imutils
 #from keras.models import load_model
 
 #From PyImageSearch
@@ -93,16 +96,16 @@ class license_finder:
         (H, W) = image.shape[:2]
         image = image[H/2:4*H/5, 0:W/3]
         #image = image[H/2:4*H/5, 0:W/3]
-        # cv2.imshow("cropped", image)
-        # cv2.waitKey(0)
+        # cv.imshow("cropped", image)
+        # cv.waitKey(0)
         orig = image.copy()
         (origH, origW) = image.shape[:2]
 
         # set the new width and height and then determine the ratio in change
         # for both the width and height
         # (newW, newH) = (args["width"], args["height"])
-        rW = origW / float(W)
-        rH = origH / float(H)
+        rW = origW / float(320)
+        rH = origH / float(320)
 
         # resize the image and grab the new image dimensions
         image = cv.resize(image, (320, 320))
@@ -159,11 +162,11 @@ class license_finder:
             roi = orig[startY:endY, startX:endX]
 
             # further processing
-            gray = cv.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-            gray = cv.threshold(gray, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+            gray = cv.cvtColor(roi, cv.COLOR_BGR2GRAY)
+            gray = cv.threshold(gray, 0, 255,cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
             gray = cv.medianBlur(gray, 3)
-            # cv2.imshow("mask", ]gray)
-            # cv2.waitKey(0)
+            # cv.imshow("mask", ]gray)
+            # cv.waitKey(0)
 
 
             # in order to apply Tesseract v4 to OCR text we must supply
@@ -196,7 +199,7 @@ class license_finder:
             cv.rectangle(output, (startX, startY), (endX, endY),
                 (0, 0, 255), 2)
             cv.putText(output, text, (startX, startY - 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+                cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
             # Publish info (needs formatting)
             textMsg = String()
