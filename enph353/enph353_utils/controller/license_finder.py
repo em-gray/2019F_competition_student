@@ -8,7 +8,7 @@ from std_msgs.msg import String, Bool
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
-from keras.models import load_model
+#from keras.models import load_model
 
 
 # ROSNode to process camera input and publish license plate files, while keeping track of visited plates
@@ -19,6 +19,8 @@ class license_finder:
         self.bridge = CvBridge()
         self.license_pub = rospy.Publisher("/license_plate", String)
         self.repeat_flag_pub = rospy.Publisher("/repeat_flag", Bool)
+        self.net_path = "frozen_east_text_detection.pb"
+        self.padding = 0.05
         self.visited = []
 
 
@@ -40,9 +42,9 @@ class license_finder:
 
         # set the new width and height and then determine the ratio in change
         # for both the width and height
-        (newW, newH) = (args["width"], args["height"])
-        rW = origW / float(newW)
-        rH = origH / float(newH)
+        # (newW, newH) = (args["width"], args["height"])
+        rW = origW / float(W)
+        rH = origH / float(H)
 
         # resize the image and grab the new image dimensions
         image = cv2.resize(image, (newW, newH))
@@ -57,7 +59,7 @@ class license_finder:
 
         # load the pre-trained EAST text detector
         print("[INFO] loading EAST text detector...")
-        net = cv2.dnn.readNet(args["east"])
+        net = cv2.dnn.readNet(self.net_path)
 
         # construct a blob from the image and then perform a forward pass of
         # the model to obtain the two output layer sets
@@ -86,8 +88,8 @@ class license_finder:
             # in order to obtain a better OCR of the text we can potentially
             # apply a bit of padding surrounding the bounding box -- here we
             # are computing the deltas in both the x and y directions
-            dX = int((endX - startX) * args["padding"])
-            dY = int((endY - startY) * 2*args["padding"])
+            dX = int((endX - startX) * self.padding)
+            dY = int((endY - startY) * 2*self.padding)
 
             # apply padding to each side of the bounding box, respectively
             startX = max(0, startX - dX)
@@ -144,8 +146,8 @@ class license_finder:
             self.license_pub.publish(textMsg)
 
             # show the output image
-            #cv2.imshow("Text Detection", cv2.resize(output,None,None,0.5, 0.5))
-            #cv2.waitKey(0)
+            cv2.imshow("Text Detection", cv2.resize(output,None,None,0.5, 0.5))
+            cv2.waitKey(0)
 
 def control():
     lf = license_finder()
@@ -163,6 +165,6 @@ def control():
 
 if __name__ == '__main__':
     try:
-    control()
+        control()
     except rospy.ROSInterruptException: pass
     

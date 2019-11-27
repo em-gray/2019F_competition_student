@@ -77,6 +77,8 @@ class image_converter:
             if (self.curr_sum > 0) and (self.prev_sum == 0):
                 print("SNAPPED!")
                 print("CAR SUM:", self.curr_sum)
+                frameMsg = Image()
+                self.license_pub.publish(frameMsg)
                 cv.imwrite("car%d.jpg" % self.car_count, frame)
                 self.car_count += 1
 
