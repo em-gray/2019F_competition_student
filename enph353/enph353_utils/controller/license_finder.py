@@ -13,7 +13,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 # ROSNode to process camera input and publish license plate files, while keeping track of visited plates
 
-# main 
+# main
 class license_finder:
     def __init__(self):
         self.bridge = CvBridge()
@@ -23,15 +23,15 @@ class license_finder:
         self.padding = 0.05
         self.visited = []
 
-
     # Inspiration from http://projectsfromtech.blogspot.com/2017/10/visual-object-recognition-in-ros-using.html
     def get_plate(self, data):
         try:
             frame = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            print("got the frame")
         except CvBridgeError as e:
             print(e)
 
-        image = cv2.resize(frame, None, fx=1, fy=2, interpolation = cv2.INTER_LINEAR)
+        image = cv.resize(frame, None, fx=1, fy=2, interpolation = cv.INTER_LINEAR)
         (H, W) = image.shape[:2]
         image = image[H/2:4*H/5, 0:W/3]
         #image = image[H/2:4*H/5, 0:W/3]
@@ -47,7 +47,7 @@ class license_finder:
         rH = origH / float(H)
 
         # resize the image and grab the new image dimensions
-        image = cv2.resize(image, (newW, newH))
+        image = cv.resize(image, (newW, newH))
         (H, W) = image.shape[:2]
 
         # define the two output layer names for the EAST detector model that
@@ -59,11 +59,11 @@ class license_finder:
 
         # load the pre-trained EAST text detector
         print("[INFO] loading EAST text detector...")
-        net = cv2.dnn.readNet(self.net_path)
+        net = cv.dnn.readNet(self.net_path)
 
         # construct a blob from the image and then perform a forward pass of
         # the model to obtain the two output layer sets
-        blob = cv2.dnn.blobFromImage(image, 1.0, (W, H),
+        blob = cv.dnn.blobFromImage(image, 1.0, (W, H),
             (123.68, 116.78, 103.94), swapRB=True, crop=False)
         net.setInput(blob)
         (scores, geometry) = net.forward(layerNames)
@@ -100,10 +100,10 @@ class license_finder:
             # extract the actual padded ROI
             roi = orig[startY:endY, startX:endX]
 
-            # further processing 
-            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-            gray = cv2.threshold(gray, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-            gray = cv2.medianBlur(gray, 3)
+            # further processing
+            gray = cv.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            gray = cv.threshold(gray, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+            gray = cv.medianBlur(gray, 3)
             # cv2.imshow("mask", ]gray)
             # cv2.waitKey(0)
 
@@ -135,19 +135,19 @@ class license_finder:
             # the text region of the input image
             text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
             output = orig.copy()
-            cv2.rectangle(output, (startX, startY), (endX, endY),
+            cv.rectangle(output, (startX, startY), (endX, endY),
                 (0, 0, 255), 2)
-            cv2.putText(output, text, (startX, startY - 20),
+            cv.putText(output, text, (startX, startY - 20),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
-            
+
             # Publish info (needs formatting)
             textMsg = String()
             textMsg.data = str(text)
             self.license_pub.publish(textMsg)
 
             # show the output image
-            cv2.imshow("Text Detection", cv2.resize(output,None,None,0.5, 0.5))
-            cv2.waitKey(0)
+            cv.imshow("Text Detection", cv.resize(output,None,None,0.5, 0.5))
+            cv.waitKey(0)
 
 def control():
     lf = license_finder()
@@ -168,4 +168,3 @@ if __name__ == '__main__':
     try:
         control()
     except rospy.ROSInterruptException: pass
-    
