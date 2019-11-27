@@ -18,7 +18,6 @@ class image_converter:
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("R1/pi_camera/image_raw", Image, self.callback)
         self.vel_pub = rospy.Publisher("R1/cmd_vel", Twist, queue_size=30)
-        self.prev_err = 0
         self.crosswalk = 0
         self.state = -3
         self.car_count = 0
@@ -33,81 +32,33 @@ class image_converter:
 
         height = np.size(frame, 0)
         width = np.size(frame,1)
-        #print(height, width)
 
-        #### frame processing for right line following
-        roi_right = frame[height-300:height, width-640:width] #region of interest
-        gray = cv.cvtColor(roi_right, cv.COLOR_BGR2GRAY)
-        ret, thresh = cv.threshold(gray, 127, 255, cv.THRESH_BINARY_INV)
-
+        thresh = self.thresh(frame)
         M = cv.moments(thresh)
         meep = (M["m00"])
         if meep < 1:
             meep = meep + 1
         cX = int(M["m10"] / meep)+640
-
-        cv.circle(frame, (int(cX), height-100), 20, (0, 255, 0), -1)
-        #cv.imshow("Cropped right corner", gray)
-
         drive_error = cX - 960
-        #print("drive error:", drive_error)
-        velocity = Twist()
-
-        #### frame processing for red line detection
-        roi_crosswalk = frame[height-200:height] # look at 50 rows of frame towards the bottom of screen
-        lower_red = np.array([0,0,245])
-        upper_red = np.array([10,10,255])
-        mask_red = cv.inRange(roi_crosswalk, lower_red, upper_red)
-        #cv.imshow("Crosswalk detection", mask_red)
 
         ########### STATE MACHINE #######################
         # inital turn to get to outer loop
         if (self.state == -3):
-            #### frame processing for initial turn
-            roi_init = frame[0:height, 0:width]
-            lower_white = np.array([190,190,190])
-            upper_white = np.array([255,255,255])
-            mask_init = cv.inRange(roi_init, lower_white, upper_white)
-            #cv.imshow("Initial Turn", mask_init)
-
-            sum = 0
-            for i in range (620, 660):
-                for j in range (10, 500):
-                    sum += mask_init[j][i] #numpy arrays are y,x
-
-            # sum_crop = mask_init[10:500][620:660]
-            # sum =  np.sum(sum_crop)
+            mask_straight = self.filter_w(frame, "straight")
+            sum = np.sum(mask_straight)
 
             if sum > 0:
                 print("DRIVING STRAIGHT")
-                velocity.angular.z = 0
-                self.vel_pub.publish(velocity)
-                velocity.linear.x = speed
-                self.vel_pub.publish(velocity)
+                self.velocities(0,speed)
             else:
                 self.state = -2
 
-
         elif (self.state == -2):
-            # turn left until good enough to line follow
-            roi_init = frame[0:height, 0:width]
-            lower_white = np.array([190,190,190])
-            upper_white = np.array([255,255,255])
-            mask_init = cv.inRange(roi_init, lower_white, upper_white)
-
-            sum = 0
-            for i in range (500, 780):
-                for j in range (300, 400):
-                    sum += mask_init[j][i] #numpy arrays are y,x
-            #
-            # sum =  np.sum(np.array(mask_init[300:400][500:780]))
-
-            #cv.rectangle(mask_init, (490, 290), (790, 390), (255,0,0), 1)
-            #cv.rectangle(frame, (490, 290), (790, 390), (255,0,0), 1)
+            mask_turn = self.filter_w(frame, "turn")
+            sum = np.sum(mask_turn)
             if sum == 0:
                 print("TURNING")
-                velocity.angular.z = d
-                self.vel_pub.publish(velocity)
+                self.velocities(d, None)
             else:
                 print("GOING TO REGULAR DRIVING")
                 self.state = 0
@@ -115,52 +66,14 @@ class image_converter:
         # regular following
         elif (self.state == 0) or (self.state == 5):
             if (drive_error > 3) or (drive_error < -3):
-                velocity.angular.z = d * drive_error
-                #print("angular v:", velocity.angular.z)
-                self.vel_pub.publish(velocity)
+                self.velocities(d*drive_error, None)
             else:
-                velocity.linear.x = speed
-                self.vel_pub.publish(velocity)
+                self.velocities(None, speed)
 
-            ##### frame processing for car detection
-            roi_blue = frame[0:height, 0:640]
-            lower_b1 = np.array([100, 0, 0])
-            upper_b1 = np.array([110, 5, 5])
-            lower_b2 = np.array([115, 15, 15])
-            upper_b2 = np.array([130, 25, 25])
-            lower_b3 = np.array([170, 85, 85])
-            upper_b3 = np.array([205, 105, 105])
-
-            mask_b1 = cv.inRange(roi_blue, lower_b1, upper_b1)
-            mask_b2 = cv.inRange(roi_blue, lower_b2, upper_b2)
-            mask_b3 = cv.inRange(roi_blue, lower_b3, upper_b3)
-            mask_blue_A = cv.bitwise_or(mask_b1, mask_b2)
-            mask_blue_B = cv.bitwise_or(mask_b2, mask_b3)
-            mask_blue = cv.bitwise_or(mask_blue_A, mask_blue_B)
-
-            #cv.rectangle(mask_blue, (145, 440), (235, 500), (255,255,255), 1)
-            #cv.imshow("Blue mask", mask_blue)
-
-            self.curr_sum = 0
-            for j in range (485,490):
-                for i in range (215,230):
-                    self.curr_sum += mask_blue[j][i]
-
-            # self.curr_sum =  np.sum(np.array(mask_blue[450:490][150:230]))
-            print("PREV:", self.prev_sum)
-            print("CURR:", self.curr_sum)
+            mask_blue = self.filter_b(frame, "left")
+            self.curr_sum = np.sum(mask_blue)
 
             if (self.curr_sum > 0) and (self.prev_sum == 0):
-                # sum = 0
-                # for j in range (300,600):
-                #     for i in range (0,30):
-                #         sum += mask_blue[j][i]
-                # if sum == 0: #if edge pixels don't have blue
-                #     print("SNAPPED!")
-                #     print("CAR SUM:", self.curr_sum)
-                #     cv.imwrite("car%d.jpg" % self.car_count, frame)
-                #     self.car_count += 1
-
                 print("SNAPPED!")
                 print("CAR SUM:", self.curr_sum)
                 cv.imwrite("car%d.jpg" % self.car_count, frame)
@@ -172,40 +85,23 @@ class image_converter:
         # look for red
         # when u see red, set self.state to 1 (saw the red line transition to next step)
         # pause for 5 seconds
-            sum = 0
-            for i in range (400,800):
-                sum += mask_red[20][i] #numpy arrays are y,x
-
-            # sum = np.sum(np.array(mask_red[20][400:800]))
+            mask_red = self.filter_r(frame,"red")
+            sum = np.sum(mask_red)
 
              # SEE RED ONCE and STOP
             if sum > 0:
                 print("SEEING RED 1:", sum)
                 self.crosswalk += 1
                 self.state = -1
-                velocity.angular.z = 0
-                self.vel_pub.publish(velocity)
-                velocity.linear.x = 0
-                self.vel_pub.publish(velocity)
+                self.velocities(0, 0)
 
         elif self.state == -1:
             # we look for pedestrian
             print("looking for ped")
             self.crosswalk += 1
 
-            roi_ped = frame[0:500, 0:width]
-
-            lower_white = np.array([190,190,190])
-            upper_white = np.array([255,255,255])
-
-            mask_white = cv.inRange(roi_ped, lower_white, upper_white)
-
-            sum_ped = 0
-            for i in range (545,800):
-                for j in range (500-166, 500-111):
-                    sum_ped += mask_white[j][i]
-
-            # sum_ped = np.sum(np.array(mask_white[500-166:500-111][545:800]))
+            mask_ped = self.filter_w(frame, "pedestrian")
+            sum_ped = np.sum(mask_ped)
 
             print("SUM PED:", sum_ped)
 
@@ -213,11 +109,7 @@ class image_converter:
             #cv.imshow("Pedestrian detection", mask_white)
 
             if (sum_ped != 0): # if pedestrian, wait, and check frame again
-                velocity.angular.z = 0
-                self.vel_pub.publish(velocity)
-                velocity.linear.x = 0
-                self.vel_pub.publish(velocity)
-
+                self.velocities(0, 0)
             else:
                 self.state = 1
 
@@ -226,37 +118,24 @@ class image_converter:
         # drive forward untili sum =0
         # if sum = 0, set self.state to 2 (saw black transition to next)
         elif self.state == 1:
-            sum = 0
-            for i in range (400,800):
-                for j in range (0,20):
-                    sum += mask_red[j][i] #numpy arrays are y,x
-
-            # sum = np.sum(np.array(mask_red[0:20][400:800]))
+            mask_red = self.filter_r(frame,"black")
+            sum = np.sum(mask_red)
 
             if sum == 0:
                 print("SEEING BLACK 2:", sum)
                 self.state = 2
             else:
-                velocity.angular.z = 0
-                self.vel_pub.publish(velocity)
-                velocity.linear.x = speed
-                self.vel_pub.publish(velocity)
+                self.velocities(0, speed)
 
         # self.state == 2 in between two red lines looking for second
         # drive straight until sum > 0
         # if sum > 0 then set self.state to 3 (saw the second red line)
         elif self.state == 2:
-            sum = 0
-            for i in range (400,800):
-                sum += mask_red[20][i] #numpy arrays are y,x
-
-            # sum = np.sum(np.array(mask_red[20][400:800]))
+            mask_red = self.filter_r(frame,"red")
+            sum = np.sum(mask_red)
 
             if sum == 0:
-                velocity.angular.z = 0
-                self.vel_pub.publish(velocity)
-                velocity.linear.x = speed
-                self.vel_pub.publish(velocity)
+                self.velocities(0, speed)
             else:
                 print("SEEING RED 3:", sum)
                 self.state = 3
@@ -266,48 +145,94 @@ class image_converter:
         # set self.state to 0 again ( we are past the crosswalk )
         # then go back to ur regular driving
         elif self.state == 3:
-            sum = 0
-            for i in range (400,800):
-                sum += mask_red[20][i] #numpy arrays are y,x
-
-            # sum = np.sum(np.array(mask_red[20][400:800]))
+            mask_red = self.filter_r(frame,"red")
+            sum = np.sum(mask_red)
 
             if sum == 0:
                 print("SEEING BLACK 4", sum)
                 self.state = 4
             else:
-                velocity.angular.z = 0
-                self.vel_pub.publish(velocity)
-                velocity.linear.x = speed
-                self.vel_pub.publish(velocity)
+                self.velocities(0, speed)
 
         elif self.state == 4:
             if (drive_error > 3) or (drive_error < -3):
-                #print("drive_error:", drive_error)
-                velocity.angular.z = d * drive_error
-                #print("angular v:", velocity.angular.z)
-                self.vel_pub.publish(velocity)
+                self.velocities(d*drive_error, None)
             else:
-                velocity.linear.x = speed
-                self.vel_pub.publish(velocity)
+                self.velocities(None, speed)
 
             if drive_error > 7:
                 print("SWITCHING TO STATE 5")
                 self.state = 5
 
-        #cv.rectangle(frame, (0, 300), (30, 600), (255,255,255), 1)
+        self.present(frame, cX)
+
+    # function to take care of publishing velocities
+    def velocities(self, ang, lin):
+        velocity = Twist()
+        if ang != None:
+            velocity.angular.z = ang
+            self.vel_pub.publish(velocity)
+        if lin != None:
+            velocity.linear.x = lin
+            self.vel_pub.publish(velocity)
+        return
+
+    def present(self, frame, cX):
         cv.rectangle(frame, (215, 485), (230, 490), (255,255,255), 1) # car detection
-        cv.rectangle(frame, (545, 500-166), (795, 500-111), (255,255,255), 1)
+        cv.rectangle(frame, (500, 334), (800, 389), (255,255,255), 2) # pedestrian detection
+        cv.circle(frame, (int(cX), 620), 20, (0, 255, 0), -1) # right white line centroid
         cv.imshow("Robot Camera", frame)
         cv.waitKey(1)
+        return
 
+    def thresh(self, frame):
+        roi=frame[420:720, 640:1280]
+        gray = cv.cvtColor(roi, cv.COLOR_BGR2GRAY)
+        ret, thresh = cv.threshold(gray, 127, 255, cv.THRESH_BINARY_INV)
+        return thresh
+
+    def filter_w(self, frame, purpose):
+        if purpose == "straight":
+            roi = frame[10:500,620:660]
+        elif purpose == "turn":
+            roi = frame[300:400,500:780]
+        elif purpose == "pedestrian":
+            roi = frame[334:389,500:800]
+        lower_white = np.array([190,190,190])
+        upper_white = np.array([255,255,255])
+        mask = cv.inRange(roi, lower_white, upper_white)
+        return mask
+
+    def filter_r(self, frame, purpose):
+        if purpose == "red":
+            roi = frame[520:522,400:800]
+        elif purpose == "black":
+            roi = frame[520:540,400:800]
+        lower_red = np.array([0,0,245])
+        upper_red = np.array([10,10,255])
+        mask = cv.inRange(roi, lower_red, upper_red)
+        return mask
+
+    def filter_b(self, frame, side):
+        if side == "left":
+            roi = frame[485:490, 215:230]
+        elif side == "right":
+            roi = frame[0:720, 640:1280]
+        lower_b1 = np.array([100, 0, 0])
+        upper_b1 = np.array([110, 5, 5])
+        lower_b2 = np.array([115, 15, 15])
+        upper_b2 = np.array([130, 25, 25])
+        lower_b3 = np.array([170, 85, 85])
+        upper_b3 = np.array([205, 105, 105])
+        mask_b1 = cv.inRange(roi, lower_b1, upper_b1)
+        mask_b2 = cv.inRange(roi, lower_b2, upper_b2)
+        mask_b3 = cv.inRange(roi, lower_b3, upper_b3)
+        mask_blue_A = cv.bitwise_or(mask_b1, mask_b2)
+        mask_blue_B = cv.bitwise_or(mask_b2, mask_b3)
+        mask_blue = cv.bitwise_or(mask_blue_A, mask_blue_B)
+        return mask_blue
 
 def main(args):
-    # nav = navigation()
-    # rospy.init_node('navigation', anonymous=True)
-
-    # rospy.Subscriber('right_follow', navigation.right_follow_callback, queue_size=1)
-    # rospy.Subscriber('cross_walk', navigation.crosswalk_callback, queue_size=1)
     ic = image_converter()
     rospy.init_node('image_converter', anonymous=True)
     try:
