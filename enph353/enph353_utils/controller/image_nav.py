@@ -30,16 +30,16 @@ class image_converter:
         except CvBridgeError as e:
             print(e)
 
-        # height = np.size(frame, 0)
-        # width = np.size(frame,1)
+        height = np.size(frame, 0)
+        width = np.size(frame,1)
 
-        thresh_r = self.thresh(frame, "right")
-        M_r = cv.moments(thresh_r)
-        meep = (M_r["m00"])
+        thresh = self.thresh(frame)
+        M = cv.moments(thresh)
+        meep = (M["m00"])
         if meep < 1:
             meep = meep + 1
-        cX_r = int(M_r["m10"] / meep)+640
-        drive_err_r = cX_r - 960
+        cX = int(M["m10"] / meep)+640
+        drive_error = cX - 960
 
         ########### STATE MACHINE #######################
         # inital turn to get to outer loop
@@ -65,8 +65,8 @@ class image_converter:
 
         # regular following
         elif (self.state == 0) or (self.state == 5):
-            if (drive_err_r > 3) or (drive_err_r < -3):
-                self.velocities(d*drive_err_r, None)
+            if (drive_error > 3) or (drive_error < -3):
+                self.velocities(d*drive_error, None)
             else:
                 self.velocities(None, speed)
 
@@ -84,22 +84,29 @@ class image_converter:
         #self.state == 0 havent seen anything
         # look for red
         # when u see red, set self.state to 1 (saw the red line transition to next step)
+        # pause for 5 seconds
             mask_red = self.filter_r(frame,"red")
             sum = np.sum(mask_red)
 
+             # SEE RED ONCE and STOP
             if sum > 0:
                 print("SEEING RED 1:", sum)
+                self.crosswalk += 1
                 self.state = -1
                 self.velocities(0, 0)
 
         elif self.state == -1:
             # we look for pedestrian
             print("looking for ped")
+            self.crosswalk += 1
 
             mask_ped = self.filter_w(frame, "pedestrian")
             sum_ped = np.sum(mask_ped)
 
             print("SUM PED:", sum_ped)
+
+            #cv.rectangle(mask_white, (545, 500-166), (800, 500-111), (255,0,0), 1)
+            #cv.imshow("Pedestrian detection", mask_white)
 
             if (sum_ped != 0): # if pedestrian, wait, and check frame again
                 self.velocities(0, 0)
@@ -148,71 +155,16 @@ class image_converter:
                 self.velocities(0, speed)
 
         elif self.state == 4:
-            if (drive_err_r > 3) or (drive_err_r < -3):
-                self.velocities(d*drive_err_r, None)
+            if (drive_error > 3) or (drive_error < -3):
+                self.velocities(d*drive_error, None)
             else:
                 self.velocities(None, speed)
 
-            if drive_err_r > 7:
-                if self.crosswalk == 1:
-                    print("SWITCHING TO STATE 6")
-                    self.state = 6
-                else:
-                    print("SWITCHING TO STATE 5")
-                    self.crosswalk += 1
-                    print("crosswalks:", self.crosswalk)
-                    self.state = 5
+            if drive_error > 7:
+                print("SWITCHING TO STATE 5")
+                self.state = 5
 
-        elif self.state == 6:
-            if (drive_err_r > 3) or (drive_err_r < -3):
-                self.velocities(d*drive_err_r, None)
-            else:
-                self.velocities(None, speed)
-
-            mask_blue = self.filter_b(frame, "left")
-            self.curr_sum = np.sum(mask_blue)
-
-            if (self.curr_sum == 0) and (self.prev_sum > 0):
-                print("SWITCH TO LEFT FOLLOW")
-                self.state = 7
-
-            self.prev_sum = self.curr_sum
-
-        elif self.state == 7:
-            # thresh_l = self.thresh(frame, "left")
-            # M_l = cv.moments(thresh_l)
-            # meep = (M_l["m00"])
-            # if meep < 1:
-            #     meep = meep + 1
-            # cX_l = int(M_l["m10"] / meep)
-            # drive_err_l = cX_l - 320
-
-            print("IN STATE 7")
-
-            mask_w_2_in = self.filter_w(frame, "inner")
-            mask_blue = self.filter_b(frame, "inner")
-            mask_com = cv.bitwise_or(mask_w_2_in, mask_blue)
-            sum = np.sum(mask_com)
-
-            print("LEFT TURN:", sum)
-
-            if sum == 0:
-                self.state = 8
-            else:
-                if (drive_err_r > 3) or (drive_err_r < -3):
-                    self.velocities(d*drive_err_r, None)
-                else:
-                    self.velocities(None, speed)
-
-        elif self.state == 8:
-            print("STATE 8")
-
-            # mask = self.filter_w(frame, "turn in")
-            # sum = np.sum(mask)
-
-            self.velocities(0, 0)
-
-        self.present(frame, cX_r)
+        self.present(frame, cX)
 
     # function to take care of publishing velocities
     def velocities(self, ang, lin):
@@ -225,20 +177,16 @@ class image_converter:
             self.vel_pub.publish(velocity)
         return
 
-    def present(self, frame, cX_r):
+    def present(self, frame, cX):
         cv.rectangle(frame, (215, 485), (230, 490), (255,255,255), 1) # car detection
         cv.rectangle(frame, (500, 334), (800, 389), (255,255,255), 2) # pedestrian detection
-        cv.rectangle(frame, (5, 550), (350, 650), (255,255,255), 1)
-        cv.circle(frame, (int(cX_r), 620), 20, (0, 255, 0), -1) # right white line centroid
+        cv.circle(frame, (int(cX), 620), 20, (0, 255, 0), -1) # right white line centroid
         cv.imshow("Robot Camera", frame)
         cv.waitKey(1)
         return
 
-    def thresh(self, frame, side):
-        if side == "right":
-            roi = frame[420:720, 640:1280]
-        elif side == "left":
-            roi = frame[550:650, 0:640]
+    def thresh(self, frame):
+        roi=frame[420:720, 640:1280]
         gray = cv.cvtColor(roi, cv.COLOR_BGR2GRAY)
         ret, thresh = cv.threshold(gray, 127, 255, cv.THRESH_BINARY_INV)
         return thresh
@@ -250,10 +198,6 @@ class image_converter:
             roi = frame[300:400,500:780]
         elif purpose == "pedestrian":
             roi = frame[334:389,500:800]
-        elif purpose == "inner":
-            roi = frame[550:650, 5:350]
-        elif purpose == "turn in":
-            roi = frame[400:650,400:800]
         lower_white = np.array([190,190,190])
         upper_white = np.array([255,255,255])
         mask = cv.inRange(roi, lower_white, upper_white)
@@ -274,8 +218,6 @@ class image_converter:
             roi = frame[485:490, 215:230]
         elif side == "right":
             roi = frame[0:720, 640:1280]
-        elif side == "inner":
-            roi = frame[550:650, 5:350]
         lower_b1 = np.array([100, 0, 0])
         upper_b1 = np.array([110, 5, 5])
         lower_b2 = np.array([115, 15, 15])
