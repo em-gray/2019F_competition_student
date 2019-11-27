@@ -153,7 +153,8 @@ def control():
     lf = license_finder()
     rospy.init_node('license_finder', anonymous=True)
     
-    rospy.Subscriber("license_pics", Image, license_finder.get_plate)
+    #rospy.Subscriber("license_pics", Image, lf.get_plate)
+    rospy.Subscriber("practice_plates", Image, lf.get_plate)
 
     try:
         rospy.spin()
