@@ -18,6 +18,7 @@ class image_converter:
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("R1/pi_camera/image_raw", Image, self.callback)
         self.vel_pub = rospy.Publisher("R1/cmd_vel", Twist, queue_size=30)
+        self.license_pub = rospy.Publisher("license_pics", Image, queue_size=3)
         self.crosswalk = 0
         self.state = -3
         self.car_count = 0
@@ -76,6 +77,8 @@ class image_converter:
             if (self.curr_sum > 0) and (self.prev_sum == 0):
                 print("SNAPPED!")
                 print("CAR SUM:", self.curr_sum)
+                frameMsg = Image()
+                self.license_pub.publish(frameMsg)
                 cv.imwrite("car%d.jpg" % self.car_count, frame)
                 self.car_count += 1
 
