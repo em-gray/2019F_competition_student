@@ -222,7 +222,6 @@ class image_converter:
         upper_b1 = np.array([110, 5, 5])
         lower_b2 = np.array([115, 15, 15])
         upper_b2 = np.array([130, 25, 25])
-        lower_b3 = np.array([170, 85, 85])
         upper_b3 = np.array([205, 105, 105])
         mask_b1 = cv.inRange(roi, lower_b1, upper_b1)
         mask_b2 = cv.inRange(roi, lower_b2, upper_b2)
