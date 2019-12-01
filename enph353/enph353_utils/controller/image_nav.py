@@ -106,10 +106,11 @@ class image_converter:
             mask_ped = self.filter_w(frame, "pedestrian")
             sum_ped = np.sum(mask_ped)
 
+
             print("SUM PED:", sum_ped)
 
-            #cv.rectangle(mask_white, (545, 500-166), (800, 500-111), (255,0,0), 1)
-            #cv.imshow("Pedestrian detection", mask_white)
+            cv.rectangle(mask_ped, (500, 334), (800, 389), (255,255,255), 1)
+            cv.imshow("Pedestrian detection", mask_ped)
 
             if (sum_ped != 0): # if pedestrian, wait, and check frame again
                 self.velocities(0, 0)

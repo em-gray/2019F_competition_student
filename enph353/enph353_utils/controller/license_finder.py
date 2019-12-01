@@ -3,6 +3,7 @@ import sys
 import rospy
 import cv2 as cv
 import numpy as np
+import re
 
 from std_msgs.msg import String, Bool
 from sensor_msgs.msg import Image
@@ -183,9 +184,10 @@ class license_finder:
             # add the bounding box coordinates and OCR'd text to the list
             # of results
             results.append(((startX, startY, endX, endY), text))
-
+     
         # sort the results bounding box coordinates from top to bottom
         results = sorted(results, key=lambda r:r[0][1])
+        infoString = ""
 
         # loop over the results
         for ((startX, startY, endX, endY), text) in results:
@@ -198,24 +200,31 @@ class license_finder:
             # using OpenCV, then draw the text and a bounding box surrounding
             # the text region of the input image
             text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
-            output = orig.copy()
+            infoString = infoString + text
+	    output = orig.copy()
+
             cv.rectangle(output, (startX, startY), (endX, endY),
                 (0, 0, 255), 2)
             cv.putText(output, text, (startX, startY - 20),
                 cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
-            # Publish info (needs formatting)
-            textMsg = String()
-            textMsg.data = str(text)
-            self.license_pub.publish(textMsg)
+        
+        # remove all non-alphanumerics
+	infoString = re.sub(r'\W+', '', infoString)
+	infoString = list(infoString)
+	
+	message = String()
 
-            # show the output image
-            cv.imshow("Text Detection", cv.resize(output,None,None,0.5, 0.5))
-            cv.waitKey(0)
+	if len(infoString) == 6:
+		message.data = "Jules&Em,Securus," + str(infoString[1]) + "," + ''.join(infoString[-4:])
+		print(message.data)
+		self.license_pub.publish(message)
+
 
 def control():
-    lf = license_finder()
     rospy.init_node('license_finder', anonymous=True)
+    lf = license_finder()
+    
 
     try:
         rospy.spin()
