@@ -78,12 +78,15 @@ class license_finder:
     def __init__(self):
         self.bridge = CvBridge()
         self.license_pub = rospy.Publisher("/license_plate", String)
-        self.repeat_flag_pub = rospy.Publisher("/repeat_flag", Bool)
         self.sub = rospy.Subscriber("license_pics", Image, self.get_plate)
-        #self.sub = rospy.Subscriber("practice_plates", Image, self.get_plate)
         self.net_path = "frozen_east_text_detection.pb"
         self.padding = 0.05
         self.visited = []
+
+        initial_msg = String()
+        initial_msg.data = "Jules&Em,Securus,0,1234"
+        self.license_pub.publish(initial_msg)
+
 
     # Inspiration from http://projectsfromtech.blogspot.com/2017/10/visual-object-recognition-in-ros-using.html
     def get_plate(self, data):

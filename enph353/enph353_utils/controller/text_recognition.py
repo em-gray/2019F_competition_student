@@ -15,6 +15,7 @@ import argparse
 import cv2
 import imutils
 import os
+import re
 
 
 
@@ -139,6 +140,7 @@ for filename in os.listdir(args["image"]):
 	# initialize the list of results
 	results = []
 
+
 	# loop over the bounding boxes
 	for (startX, startY, endX, endY) in boxes:
 		# scale the bounding box coordinates based on the respective
@@ -186,6 +188,7 @@ for filename in os.listdir(args["image"]):
 	# sort the results bounding box coordinates from top to bottom
 	results = sorted(results, key=lambda r:r[0][1])
 
+	infoString = ""
 	# loop over the results
 	for ((startX, startY, endX, endY), text) in results:
 		# display the text OCR'd by Tesseract
@@ -197,6 +200,7 @@ for filename in os.listdir(args["image"]):
 		# using OpenCV, then draw the text and a bounding box surrounding
 		# the text region of the input image
 		text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
+		infoString = infoString + text
 		output = orig.copy()
 		cv2.rectangle(output, (startX, startY), (endX, endY),
 			(0, 0, 255), 2)
@@ -206,3 +210,14 @@ for filename in os.listdir(args["image"]):
 		# show the output image
 		cv2.imshow("Text Detection", cv2.resize(output,None,None,0.5, 0.5))
 		cv2.waitKey(0)
+	
+	# remove all non-alphanumerics
+	infoString = re.sub(r'\W+', '', infoString)
+	infoString = list(infoString)
+	
+	message = ""
+
+	if len(infoString) == 6:
+		message = "Jules&Em,Securus," + str(infoString[1]) + "," + ''.join(infoString[-4:])
+
+		print(message)
