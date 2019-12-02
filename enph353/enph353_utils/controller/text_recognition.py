@@ -16,6 +16,7 @@ import cv2
 import imutils
 import os
 import re
+import operator
 
 
 
@@ -213,11 +214,120 @@ for filename in os.listdir(args["image"]):
 	
 	# remove all non-alphanumerics
 	infoString = re.sub(r'\W+', '', infoString)
+	infoString = infoString.upper()
 	infoString = list(infoString)
 	
 	message = ""
 
+
+	# visited dictionaries (hacky, sorry!)
+	p1 = {}
+	p2 = {}
+	p3 = {}
+	p4 = {}
+	p5 = {}
+	p6 = {}
+	p0 = {}
+
+	# common letter mistakes
+	mistakenChars = {
+			"O":'0',
+			"T":'1',
+			"S":'8',
+			"G":'6',
+			"H":'4',
+			"Z":'2'	}
+	
+	# common number mistakes
+	mistakenNums = {
+			"0":'O',
+			"1":'T',
+			"8":'S',
+			"6":'G',
+			"4":'H',
+			"2":'Z'
+	}
+
 	if len(infoString) == 6:
-		message = "Jules&Em,Securus," + str(infoString[1]) + "," + ''.join(infoString[-4:])
+		# correct issues in location reading
+		location = infoString[1]
+		if location in mistakenChars:
+			location = mistakenChars[location]
+			#handler for when it reads "PS"
+			if location == 8:
+				location = 5
+
+		# correct issues in plate reading
+		plate = infoString[-4:]
+		for char in plate:
+			idx = plate.index(char)
+			if idx < 2:
+				if char in mistakenNums:
+					char = mistakenNums[char]
+			else:
+				if char in mistakenChars:
+					char = mistakenChars[char]
+
+			# replace originalchar  with corrected
+			plate[idx] = char
+
+		# handle different valid plates (this is also going to be cleaned up)
+		spot = int(location)
+		plateStr = ''.join(plate)
+		if spot == 1:
+			if plateStr in p1:
+				p1[plateStr] += 1
+			else:
+				p1[plateStr] = 1
+			print(p1)
+			bestPlate = max(p1.iteritems(), key=operator.itemgetter(1))[0]
+				
+		elif spot == 2:
+			if plateStr in p2:
+				p2[plateStr] += 1
+			else:
+				p2[plateStr] = 1
+			print(p2)
+			bestPlate = max(p2.iteritems(), key=operator.itemgetter(1))[0]
+		elif spot == 3:
+			if plateStr in p3:
+				p3[plateStr] += 1
+			else:
+				p3[plateStr] = 1
+			print(p3)
+			bestPlate = max(p3.iteritems(), key=operator.itemgetter(1))[0]
+		elif spot == 4:
+			if plateStr in p4:
+				p4[plateStr] += 1
+			else:
+				p4[plateStr] = 1
+			print(p4)
+			bestPlate = max(p4.iteritems(), key=operator.itemgetter(1))[0]
+		elif spot == 5:
+			if plateStr in p5:
+				p5[plateStr] += 1
+			else:
+				p5[plateStr] = 1
+			print(p5)
+			bestPlate = max(p5.iteritems(), key=operator.itemgetter(1))[0]
+		elif spot == 6:
+			if plateStr in p6:
+				p6[plateStr] += 1
+			else:
+				p6[plateStr] = 1
+			print(p6)
+			bestPlate = max(p6.iteritems(), key=operator.itemgetter(1))[0]
+		elif spot == 0:
+			if plateStr in p0:
+				p0[plateStr] += 1
+			else:
+				p0[plateStr] = 1
+			print(p0)
+			bestPlate = max(p0.iteritems(), key=operator.itemgetter(1))[0]
+		
+
+		message = "Jules&Em,Securus," + location + "," + bestPlate
+	
+
 
 		print(message)
