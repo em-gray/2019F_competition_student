@@ -100,8 +100,8 @@ class license_finder:
         (H, W) = image.shape[:2]
         image = image[H/2:4*H/5, 0:W/3]
         #image = image[H/2:4*H/5, 0:W/3]
-        # cv.imshow("cropped", image)
-        # cv.waitKey(0)
+        #cv.imshow("cropped", image)
+        #cv.waitKey(0)
         orig = image.copy()
         (origH, origW) = image.shape[:2]
 
@@ -207,6 +207,8 @@ class license_finder:
                 (0, 0, 255), 2)
             cv.putText(output, text, (startX, startY - 20),
                 cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+	    cv.imshow("output", output)
+	    cv.waitKey(0)
 
         
         # remove all non-alphanumerics

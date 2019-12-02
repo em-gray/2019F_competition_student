@@ -24,6 +24,7 @@ class image_converter:
         self.car_count = 0
         self.prev_sum = 0
         self.curr_sum = 0
+	self.ped_seen = 0
 
     def callback(self, data):
         try:
@@ -95,6 +96,7 @@ class image_converter:
             if sum > 0:
                 print("SEEING RED 1:", sum)
                 self.crosswalk += 1
+		self.ped_seen = 0
                 self.state = -1
                 self.velocities(0, 0)
 
@@ -109,13 +111,15 @@ class image_converter:
 
             print("SUM PED:", sum_ped)
 
-            cv.rectangle(mask_ped, (500, 334), (800, 389), (255,255,255), 1)
-            cv.imshow("Pedestrian detection", mask_ped)
+            #cv.rectangle(mask_ped, (500, 334), (800, 389), (255,255,255), 1)
+            #cv.imshow("Pedestrian detection", mask_ped)
 
             if (sum_ped != 0): # if pedestrian, wait, and check frame again
                 self.velocities(0, 0)
+		self.ped_seen += 1
             else:
-                self.state = 1
+		if self.ped_seen > 3:
+                	self.state = 1
 
         # self.state == 1 saw the first red line
         # need to wait for that region to be black again
@@ -127,6 +131,7 @@ class image_converter:
 
             if sum == 0:
                 print("SEEING BLACK 2:", sum)
+		self.ped_seen = 0
                 self.state = 2
             else:
                 self.velocities(0, speed)
@@ -168,7 +173,8 @@ class image_converter:
                 print("SWITCHING TO STATE 5")
                 self.state = 5
 
-        self.present(frame, cX)
+        #self.present(frame, cX)
+	print("SAW PED:", self.ped_seen)
 
     # function to take care of publishing velocities
     def velocities(self, ang, lin):
@@ -183,7 +189,7 @@ class image_converter:
 
     def present(self, frame, cX):
         cv.rectangle(frame, (215, 485), (230, 490), (255,255,255), 1) # car detection
-        cv.rectangle(frame, (500, 334), (800, 389), (255,255,255), 2) # pedestrian detection
+        cv.rectangle(frame, (500, 334), (810, 385), (255,255,255), 2) # pedestrian detection
         cv.circle(frame, (int(cX), 620), 20, (0, 255, 0), -1) # right white line centroid
         cv.imshow("Robot Camera", frame)
         cv.waitKey(1)
@@ -198,12 +204,16 @@ class image_converter:
     def filter_w(self, frame, purpose):
         if purpose == "straight":
             roi = frame[10:500,620:660]
+	    lower_white = np.array([190,190,190])
+            upper_white = np.array([255,255,255])
         elif purpose == "turn":
             roi = frame[300:400,500:780]
+	    lower_white = np.array([190,190,190])
+            upper_white = np.array([255,255,255])
         elif purpose == "pedestrian":
-            roi = frame[334:389,500:800]
-        lower_white = np.array([190,190,190])
-        upper_white = np.array([255,255,255])
+            roi = frame[334:385,530:810]
+	    lower_white = np.array([180,180,180])
+            upper_white = np.array([255,255,255])
         mask = cv.inRange(roi, lower_white, upper_white)
         return mask
 
