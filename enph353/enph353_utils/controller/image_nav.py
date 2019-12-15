@@ -24,7 +24,7 @@ class image_converter:
         self.car_count = 0
         self.prev_sum = 0
         self.curr_sum = 0
-	self.ped_seen = 0
+        self.ped_seen = 0
 
     def callback(self, data):
         try:
@@ -80,6 +80,8 @@ class image_converter:
                 print("CAR SUM:", self.curr_sum)
                 frameMsg = data
                 self.license_pub.publish(frameMsg)
+		cv.circle(frame, (int(cX), 620), 20, (0, 255, 0), -1)
+		cv.rectangle(frame, (215, 485), (230, 490), (255,255,255), 1)
                 cv.imwrite("car%d.jpg" % self.car_count, frame)
                 self.car_count += 1
 
@@ -96,7 +98,7 @@ class image_converter:
             if sum > 0:
                 print("SEEING RED 1:", sum)
                 self.crosswalk += 1
-		self.ped_seen = 0
+                self.ped_seen = 0
                 self.state = -1
                 self.velocities(0, 0)
 
@@ -105,9 +107,11 @@ class image_converter:
             print("looking for ped")
             self.crosswalk += 1
 
+	    cv.rectangle(frame, (500, 334), (810, 385), (255,255,255), 2)
+            cv.imwrite("crosswalk%d.jpg" % self.crosswalk, frame)
+
             mask_ped = self.filter_w(frame, "pedestrian")
             sum_ped = np.sum(mask_ped)
-
 
             print("SUM PED:", sum_ped)
 
@@ -116,10 +120,11 @@ class image_converter:
 
             if (sum_ped != 0): # if pedestrian, wait, and check frame again
                 self.velocities(0, 0)
-		self.ped_seen += 1
+                print("SAW PED:", self.ped_seen)
+                self.ped_seen += 1
             else:
-		if self.ped_seen > 3:
-                	self.state = 1
+                if self.ped_seen > 3:
+                    self.state = 1
 
         # self.state == 1 saw the first red line
         # need to wait for that region to be black again
@@ -131,7 +136,7 @@ class image_converter:
 
             if sum == 0:
                 print("SEEING BLACK 2:", sum)
-		self.ped_seen = 0
+                self.ped_seen = 0
                 self.state = 2
             else:
                 self.velocities(0, speed)
@@ -173,8 +178,8 @@ class image_converter:
                 print("SWITCHING TO STATE 5")
                 self.state = 5
 
-        #self.present(frame, cX)
-	print("SAW PED:", self.ped_seen)
+    #self.present(frame, cX)
+
 
     # function to take care of publishing velocities
     def velocities(self, ang, lin):
@@ -191,6 +196,10 @@ class image_converter:
         cv.rectangle(frame, (215, 485), (230, 490), (255,255,255), 1) # car detection
         cv.rectangle(frame, (500, 334), (810, 385), (255,255,255), 2) # pedestrian detection
         cv.circle(frame, (int(cX), 620), 20, (0, 255, 0), -1) # right white line centroid
+        if self.ped_seen == 1:
+            cv.imwrite("pedestrian%d.jpg" % self.car_count, frame)
+        if self.state == 0:
+            cv.imwrite("ay%d.jpg" % self.car_count, frame)
         cv.imshow("Robot Camera", frame)
         cv.waitKey(1)
         return
