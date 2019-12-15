@@ -233,6 +233,7 @@ for filename in os.listdir(args["image"]):
 	mistakenChars = {
 			"O":'0',
 			"T":'1',
+			"I":'1',
 			"S":'8',
 			"G":'6',
 			"H":'4',

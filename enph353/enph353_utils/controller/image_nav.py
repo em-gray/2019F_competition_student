@@ -18,7 +18,7 @@ class image_converter:
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("R1/pi_camera/image_raw", Image, self.callback)
         self.vel_pub = rospy.Publisher("R1/cmd_vel", Twist, queue_size=30)
-        self.license_pub = rospy.Publisher("license_pics", Image, queue_size=3)
+        self.license_pub = rospy.Publisher("license_pics", Image, queue_size=30)
         self.crosswalk = 0
         self.state = -3
         self.car_count = 0
